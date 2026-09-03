@@ -109,6 +109,14 @@ input {
   color: var(--danger);
 }
 
+.sync-error {
+  margin: 0;
+  width: 100%;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--danger);
+}
+
 .card {
   display: flex;
   flex-direction: column;

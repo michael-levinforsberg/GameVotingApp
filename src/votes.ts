@@ -24,8 +24,6 @@ export type Result =
   | { type: "saturday"; names: string[] }
   | { type: "waiting" };
 
-export const STORAGE_KEY = "game-voting-app";
-
 export type StoredVotes = {
   weekId: string;
   people: Person[];
@@ -72,6 +70,14 @@ export function likelihoodFromSlider(value: number): Likelihood {
 
 export function fillPercentFromSlider(value: number): number {
   return (Math.min(SLIDER_MAX, Math.max(0, value)) / SLIDER_MAX) * 100;
+}
+
+export function isDay(value: unknown): value is Day {
+  return value === "friday" || value === "saturday";
+}
+
+export function isLikelihood(value: unknown): value is Likelihood {
+  return (LIKELIHOOD_OPTIONS as readonly string[]).includes(value as string);
 }
 
 export function formatDayBadge(name: string, likelihood: Likelihood): string {
@@ -246,26 +252,6 @@ export function votesForCurrentWeek(
   }
 
   return { weekId: currentWeek, people: [] };
-}
-
-export function loadPeople(now: Date = new Date()): Person[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const stored = raw ? (JSON.parse(raw) as unknown) : null;
-    const next = votesForCurrentWeek(stored, now);
-    saveStored(next);
-    return next.people;
-  } catch {
-    return [];
-  }
-}
-
-export function savePeople(people: Person[], now: Date = new Date()): void {
-  saveStored({ weekId: weekId(now), people });
-}
-
-function saveStored(state: StoredVotes): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 function parsePeople(entries: unknown[]): Person[] {

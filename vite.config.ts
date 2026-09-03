@@ -1,7 +1,13 @@
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+import { votesApiPlugin } from "./server/plugin.ts";
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
-})
+  plugins: [react(), votesApiPlugin()],
+  server: {
+    host: true,
+  },
+  preview: {
+    host: true,
+  },
+});

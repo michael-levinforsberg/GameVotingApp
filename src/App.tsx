@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
+  fetchPeople,
+  submitDayVote,
+  submitRemoveDayVote,
+  submitRemoveUnavailable,
+  submitUnavailableVote,
+} from "./api";
+import {
   dayVotes,
   fillPercentFromSlider,
   findPerson,
@@ -9,17 +16,11 @@ import {
   likelihoodFromSlider,
   LIKELIHOOD_LABELS,
   LIKELIHOOD_OPTIONS,
-  loadPeople,
   normalizeName,
-  removeDayVote,
-  removeUnavailable,
-  savePeople,
   sliderFromLikelihood,
   SLIDER_MAX,
   tally,
   unavailableVoters,
-  voteForDay,
-  voteUnavailable,
   type Day,
   type Person,
 } from "./votes";
@@ -40,14 +41,40 @@ function App() {
   const [nameError, setNameError] = useState("");
   const [fridayValue, setFridayValue] = useState(DEFAULT_SLIDER);
   const [saturdayValue, setSaturdayValue] = useState(DEFAULT_SLIDER);
-  const [people, setPeople] = useState<Person[]>(() =>
-    typeof localStorage === "undefined" ? [] : loadPeople(),
-  );
+  const [people, setPeople] = useState<Person[]>([]);
+  const [syncError, setSyncError] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const mutatingRef = useRef(false);
 
   useEffect(() => {
-    savePeople(people);
-  }, [people]);
+    let cancelled = false;
+
+    async function refresh() {
+      if (mutatingRef.current) return;
+
+      try {
+        const next = await fetchPeople();
+        if (!cancelled) {
+          setPeople(next);
+          setSyncError("");
+        }
+      } catch {
+        if (!cancelled) {
+          setSyncError("Kunde inte hämta röster från servern.");
+        }
+      }
+    }
+
+    void refresh();
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const result = useMemo(() => tally(people), [people]);
   const trimmedName = normalizeName(name);
@@ -64,35 +91,68 @@ function App() {
     return trimmedName;
   }
 
-  function handleDayVote(day: Day) {
+  async function handleDayVote(day: Day) {
     const voter = requireName();
     if (!voter) return;
 
     const likelihood = likelihoodFromSlider(
       day === "friday" ? fridayValue : saturdayValue,
     );
-    setPeople((current) => voteForDay(current, voter, day, likelihood));
+
+    mutatingRef.current = true;
+    try {
+      setPeople(await submitDayVote(voter, day, likelihood));
+      setSyncError("");
+    } catch {
+      setSyncError("Kunde inte spara rösten.");
+    } finally {
+      mutatingRef.current = false;
+    }
   }
 
-  function handleRemoveDayVote(day: Day) {
+  async function handleRemoveDayVote(day: Day) {
     const voter = requireName();
     if (!voter) return;
 
-    setPeople((current) => removeDayVote(current, voter, day));
+    mutatingRef.current = true;
+    try {
+      setPeople(await submitRemoveDayVote(voter, day));
+      setSyncError("");
+    } catch {
+      setSyncError("Kunde inte ta bort rösten.");
+    } finally {
+      mutatingRef.current = false;
+    }
   }
 
-  function handleUnavailableVote() {
+  async function handleUnavailableVote() {
     const voter = requireName();
     if (!voter) return;
 
-    setPeople((current) => voteUnavailable(current, voter));
+    mutatingRef.current = true;
+    try {
+      setPeople(await submitUnavailableVote(voter));
+      setSyncError("");
+    } catch {
+      setSyncError("Kunde inte spara rösten.");
+    } finally {
+      mutatingRef.current = false;
+    }
   }
 
-  function handleRemoveUnavailable() {
+  async function handleRemoveUnavailable() {
     const voter = requireName();
     if (!voter) return;
 
-    setPeople((current) => removeUnavailable(current, voter));
+    mutatingRef.current = true;
+    try {
+      setPeople(await submitRemoveUnavailable(voter));
+      setSyncError("");
+    } catch {
+      setSyncError("Kunde inte ta bort rösten.");
+    } finally {
+      mutatingRef.current = false;
+    }
   }
 
   function sliderValue(day: Day): number {
@@ -107,6 +167,7 @@ function App() {
   return (
     <main className="voting-screen">
       <section className="voting-column" aria-label="Röstning">
+        {syncError ? <p className="sync-error">{syncError}</p> : null}
         <label className="field">
           <span className="field-label">Namn</span>
           <input
